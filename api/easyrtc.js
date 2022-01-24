@@ -5523,7 +5523,10 @@ var Easyrtc = function() {
                         peerConns[id].pc.removeStream(stream);
                     } catch (err) {
                     }
-                    self.sendPeerMessage(id, "__closingMediaStream", {streamId: streamId, streamName: streamName});
+                    self.sendPeerMessage(easyrtcid, "easyrtc_streamClosed", {
+                        streamId: streamId,
+                        streamName: streamName
+                    });
                 }
             }
 
@@ -6550,16 +6553,16 @@ var Easyrtc = function() {
             self.webSocketConnected = false;
         }
         self.hangupAll();
-        if (roomOccupantListener) {
-            for (roomName in lastLoggedInList) {
-                if (lastLoggedInList.hasOwnProperty(roomName)) {
+        for (roomName in lastLoggedInList) {
+            if (lastLoggedInList.hasOwnProperty(roomName)) {
 
-                    // Notify roomOccupantListener
+                // Notify roomOccupantListener
+                if (roomOccupantListener) {
                     roomOccupantListener(roomName, {}, false);
-
-                    // Clear roomApiFields and roomApiFieldTimer
-                    self.setRoomApiField(roomName);
                 }
+
+                // Clear roomApiFields and roomApiFieldTimer
+                self.setRoomApiField(roomName);
             }
         }
 
@@ -8440,33 +8443,35 @@ var Easyrtc = function() {
     // this function gets called for each room when there is a room update.
     //
     function processOccupantList(roomName, occupantList) {
-        var myInfo = null;
-        var reducedList = {};
+        var roomUser = null;
+        var roomOccupants = {};
 
         var id;
         for (id in occupantList) {
             if (occupantList.hasOwnProperty(id)) {
                 if (id === self.myEasyrtcid) {
-                    myInfo = occupantList[id];
+                    roomUser = occupantList[id];
                 }
                 else {
-                    reducedList[id] = occupantList[id];
+                    roomOccupants[id] = occupantList[id];
                 }
             }
         }
-        //
+
         // processLostPeers detects peers that have gone away and performs
         // house keeping accordingly.
-        //
-        processLostPeers(reducedList);
-        //
-        //
-        //
-        addAggregatingTimer("roomOccupants&" + roomName, function(){
+        processLostPeers(roomOccupants);
+
+        addAggregatingTimer("roomOccupants&" + roomName, function() {
+
             if (roomOccupantListener) {
-                roomOccupantListener(roomName, reducedList, myInfo);
+                roomOccupantListener(roomName, roomOccupants, roomUser);
             }
-            self.emitEvent("roomOccupants", {roomName:roomName, occupants:lastLoggedInList});
+
+            self.emitEvent("roomOccupants", {
+                roomName:roomName,
+                occupants:lastLoggedInList
+            });
         }, 100);
     }
 
@@ -8594,6 +8599,15 @@ var Easyrtc = function() {
                 if (self.roomEntryListener) {
                     self.roomEntryListener(false, roomName);
                 }
+
+                // Notify roomOccupantListener
+                if (roomOccupantListener) {
+                    roomOccupantListener(roomName, {}, false);
+                }
+
+                // Clear roomApiFields and roomApiFieldTimer
+                self.setRoomApiField(roomName);
+
                 delete self.roomJoin[roomName];
                 delete lastLoggedInList[roomName];
                 continue;
